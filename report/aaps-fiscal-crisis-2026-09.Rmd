@@ -17,6 +17,7 @@ library(tidyverse)
 library(ggsci)
 library(scales)
 library(patchwork)
+library(kableExtra)
 
 pal <- pal_jama()(7)
 theme_set(
@@ -160,7 +161,7 @@ chg <- left_join(w09, w24, by = "GEOID") %>%
   arrange(desc(delta))
 ```
 
-```{r fig-geo, fig.height=6, fig.cap="Largest school-age population changes by tract, 2005-09 to 2020-24 windows. Left: absolute change; right: percent change (tracts with 2009 base of at least 100)."}
+```{r fig-geo, fig.height=6, fig.cap="Largest school-age population changes by tract, 2005-09 to 2020-24 windows. Left: absolute change; right: percent change (tracts with 2009 base of at least 100). Labels placed inside panel bounds."}
 top_loss <- chg %>% filter(delta < 0) %>% head(10)
 top_gain <- chg %>% filter(delta > 0) %>% head(10)
 both <- bind_rows(top_loss, top_gain) %>% mutate(dir = ifelse(delta < 0, "Loss", "Gain"))
@@ -168,27 +169,35 @@ both <- bind_rows(top_loss, top_gain) %>% mutate(dir = ifelse(delta < 0, "Loss",
 pA <- ggplot(both, aes(x = delta, y = reorder(tract_name, delta), fill = dir)) +
   geom_col(width = 0.7) +
   scale_fill_manual(values = c(Gain = pal[5], Loss = pal[2]), guide = "none") +
-  scale_x_continuous(labels = label_number(sign = TRUE)) +
-  geom_text(aes(label = paste0(ifelse(delta > 0, "+", ""), format(delta, big.mark = ","))), hjust = ifelse(both$delta > 0, -0.15, 1.15), size = 3.1) +
+  scale_x_continuous(labels = label_number(sign = TRUE),
+                     expand = expansion(mult = c(0.16, 0.16))) +
+  geom_text(aes(label = paste0(ifelse(delta > 0, "+", ""), format(round(delta), big.mark = ","))),
+            hjust = "inward", size = 3, fontface = "bold") +
   labs(title = "Absolute Change (top 10 each direction)",
        x = "Change in 5-17 population", y = NULL,
        caption = "Source: ACS 5-year, AAPS tracts.") +
   theme(axis.text.y = element_text(size = 8.5))
 
-pB <- chg %>% filter(!is.na(pct)) %>%
+pct_dat <- chg %>% filter(!is.na(pct)) %>%
   mutate(extreme = pct <= -30 | pct >= 30) %>%
-  filter(extreme | abs(delta) >= 120) %>%
-  ggplot(aes(x = pct, y = reorder(tract_name, pct))) +
+  filter(extreme | abs(delta) >= 120)
+
+pB <- ggplot(pct_dat, aes(x = pct, y = reorder(tract_name, pct))) +
   geom_col(aes(fill = pct > 0), width = 0.7, show.legend = FALSE) +
   scale_fill_manual(values = c(`TRUE` = pal[5], `FALSE` = pal[2])) +
-  geom_text(aes(label = paste0(pct, "%")), hjust = ifelse((chg %>% filter(!is.na(pct)) %>% mutate(extreme = pct <= -30 | pct >= 30) %>% filter(extreme | abs(delta) >= 120) %>% pull(pct)) > 0, -0.3, 1.3), size = 3) +
-  scale_x_continuous(labels = percent_format(scale = 1)) +
+  scale_x_continuous(labels = percent_format(scale = 1),
+                     expand = expansion(mult = c(0.18, 0.18))) +
+  geom_text(aes(label = paste0(pct, "%")), hjust = "inward", size = 3, fontface = "bold") +
   labs(title = "Percent Change (base >= 100)",
        x = "% change 2009-2024", y = NULL,
        caption = "Source: ACS 5-year, AAPS tracts.") +
   theme(axis.text.y = element_text(size = 8.5))
 
 pA | pB
+```
+
+```{r fig-map, fig.cap="Choropleth of census-tract school-age population change. Red = loss, blue = gain; bold labels mark tracts with absolute change of at least 100 or relative change of at least 40% (base at least 100). Black outline: AAPS district boundary (TIGER 2024).", out.width="100%"}
+knitr::include_graphics("tract_map.png")
 ```
 
 The spatial pattern is stark. The heaviest losses cluster in inner-ring tracts (e.g., tract 4149 lost roughly half its school-age population, -520; tracts 4044 and 4045 follow), while growth concentrated in southern new-development areas (tract 4140 +87%/+260; tracts 4550 and 4056 also gained). Elementary attendance areas anchored in inner-ring neighborhoods face the most acute pressure; the district's own capacity-utilization modeling and the 2019 bond's rebuild list (Mitchell, Dicken, Logan, Thurston - all southern or eastern) already reflect a southward demographic tilt.
@@ -239,14 +248,14 @@ events <- tribble(
   "2026-09-04", "Teachers ratify short-term contract through Dec 2027 (58%-42%)",
   "2026-11-03", "Board election: 5 of 7 seats contested (scheduled)"
 )
-knitr::kable(events, caption = "Consolidated from four research tracks; see Sources.")
+knitr::kable(events, caption = "Consolidated from four research tracks; see Sources.") %>% kableExtra::column_spec(1, width = "1.1in", bold = TRUE) %>% kableExtra::column_spec(2, width = "4.9in")
 ```
 
 \newpage
 
 # Sources
 
-1. AAPS official documents - budget presentations, board materials, bond program updates, personnel contracts (a2schools.org), retrieved September 9, 2026. Full inventory: vault `AAPS-Crisis-2026-sources/official-gov.md`.
+1. AAPS official documents - budget presentations, board materials, bond program updates, personnel contracts (a2schools.org), retrieved September 9, 2026. Full inventory: `sources/official-gov.md` in the project repository.
 2. Michigan Treasury quarterly early-warning and deficit reports; MDE; Michigan Legislature (SB 166/PA 15-2025, HB 5630/PA 25-2026, SB 903); MiSchoolData. Inventory: `state-level.md`.
 3. ACS 5-year estimates 2005-2009 through 2020-2024, Census bulk summary files (www2.census.gov), tract-level B01001 age-sex counts for 63 AAPS-boundary tracts, area-weighted. Pipeline: `population/` directory.
 4. Ann Arbor Observer (Aug 26, 2026, paywalled); MLive/annarbornews; Michigan Daily; WEMU; Michigan Public. Inventory: `local-news.md`.
